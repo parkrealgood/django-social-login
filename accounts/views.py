@@ -5,7 +5,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.clients.google import GoogleClient
-from accounts.constants import GOOGLE_ACCOUNT_URL
+from accounts.clients.kakao import KakaoClient
+from accounts.constants import GOOGLE_ACCOUNT_URL, KAKAO_AUTHORIZE_URL
 
 
 class GoogleLoginView(APIView):
@@ -43,3 +44,36 @@ class GoogleCallbackView(APIView):
         email = user_info.get('email')
 
         return Response({'message': f'{email} login success'}, status=status.HTTP_200_OK)
+
+
+class KakaoLoginView(APIView):
+    """Kakao 로그인 페이지"""
+    def get(self, request):
+        client_id = settings.KAKAO_CLIENT_ID
+        redirect_uri = settings.KAKAO_REDIRECT_URI
+        kakao_oauth_url = (f'{KAKAO_AUTHORIZE_URL}'
+                           f'?client_id={client_id}'
+                           f'&redirect_uri={redirect_uri}'
+                           f'&response_type=code'
+                           f'&prompt=none')
+        return redirect(kakao_oauth_url)
+
+
+class KaKaoCallbackView(APIView):
+    """Kakao로부터 리디렉션 받은 후 처리"""
+    def get(self, request):
+        code = request.query_params.get('code')
+        if not code:
+            return Response({'error': 'code parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = KakaoClient().get_token(code=code)
+        if not token:
+            return Response({'error': 'token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        access_token = token.get('access_token')
+        if not access_token:
+            return Response({'error': 'access_token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_info = KakaoClient().get_user_info(access_token=access_token)
+        user_nickname = user_info.get('kakao_account').get('profile').get('nickname')
+        return Response({'message': f'{user_nickname} login success'}, status=status.HTTP_200_OK)

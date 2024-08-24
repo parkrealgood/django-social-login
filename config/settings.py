@@ -16,11 +16,11 @@ def get_secret(setting):
     try:
         return secrets[setting]
     except KeyError:
-        error_msg = "Set the {} environment variable".format(setting)
+        error_msg = 'Set the {} environment variable'.format(setting)
         raise ImproperlyConfigured(error_msg)
 
 
-SECRET_KEY = get_secret("SECRET_KEY")
+SECRET_KEY = get_secret('SECRET_KEY')
 
 DEBUG = True
 
@@ -106,6 +106,10 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Google Oauth 2.0 setting
-GOOGLE_CLIENT_ID = get_secret("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = get_secret("GOOGLE_CLIENT_SECRET")
-GOOGLE_REDIRECT_URI = get_secret("GOOGLE_REDIRECT_URI")
+GOOGLE_CLIENT_ID = get_secret('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = get_secret('GOOGLE_CLIENT_SECRET')
+GOOGLE_REDIRECT_URI = get_secret('GOOGLE_REDIRECT_URI')
+
+# Kakao Oauth 2.0 setting
+KAKAO_CLIENT_ID = get_secret('KAKAO_CLIENT_ID')
+KAKAO_REDIRECT_URI = get_secret('KAKAO_REDIRECT_URI')
