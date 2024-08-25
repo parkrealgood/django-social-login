@@ -1,3 +1,4 @@
+import requests
 from django.conf import settings
 from django.shortcuts import redirect
 from rest_framework import status
@@ -6,8 +7,10 @@ from rest_framework.views import APIView
 
 from accounts.clients.google import GoogleClient
 from accounts.clients.kakao import KakaoClient
+from accounts.clients.twitter import TwitterClient
 from accounts.constants import (
-    GOOGLE_ACCOUNT_URL, KAKAO_AUTHORIZE_URL, TWITTER_REQUEST_TOKEN_URL, TWITTER_AUTHORIZE_URL, TWITTER_ACCESS_TOKEN_URL
+    GOOGLE_ACCOUNT_URL, KAKAO_AUTHORIZE_URL, TWITTER_REQUEST_TOKEN_URL, TWITTER_AUTHORIZE_URL, TWITTER_ACCESS_TOKEN_URL,
+    TWITTER_OAUTH2_AUTHORIZE_URL
 )
 from accounts.utils import get_oauth1_session
 
@@ -88,7 +91,7 @@ class TwitterLoginView(APIView):
         oauth = get_oauth1_session(
             client_key=settings.TWITTER_API_KEY,
             client_secret=settings.TWITTER_API_SECRET_KEY,
-            callback_uri=settings.TWITTER_REDIRECT_URI
+            callback_uri=settings.TWITTER_OAUTH1_REDIRECT_URI
         )
 
         try:
@@ -127,3 +130,43 @@ class TwitterCallbackView(APIView):
             return Response({'message': f'twitter login success'}, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TwitterOauth2LoginView(APIView):
+    """Twitter 로그인 페이지"""
+    def get(self, request):
+        authorization_url = TWITTER_OAUTH2_AUTHORIZE_URL
+        params = {
+            'response_type': 'code',
+            'client_id': settings.TWITTER_CLIENT_ID,
+            'redirect_uri': settings.TWITTER_OAUTH2_REDIRECT_URI,
+            'scope': 'tweet.read users.read offline.access',
+            'state': 'state',
+            'code_challenge': 'challenge',
+            'code_challenge_method': 'plain'
+        }
+        query_string = requests.compat.urlencode(params)
+        twitter_auth_url = f'{authorization_url}?{query_string}'
+        return redirect(twitter_auth_url)
+
+
+class TwitterOauth2CallbackView(APIView):
+    """Twitter로부터 리디렉션 받은 후 처리"""
+    def get(self, request):
+        code = request.GET.get('code')
+        if not code:
+            return Response({'error': 'code parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = TwitterClient().get_token(code=code)
+        if not token:
+            return Response({'error': 'token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        access_token = token.get('access_token')
+        if not access_token:
+            return Response({'error': 'access_token is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_info = TwitterClient().get_user_info(access_token=access_token)
+        if not user_info:
+            return Response({'error': 'user_info is required'}, status=status.HTTP_400_BAD_REQUEST)
+        username = user_info.get('data').get('username')
+        return Response({'message': f'{username} twitter oauth 2.0 login success'}, status=status.HTTP_200_OK)
