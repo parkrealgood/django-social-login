@@ -6,7 +6,10 @@ from rest_framework.views import APIView
 
 from accounts.clients.google import GoogleClient
 from accounts.clients.kakao import KakaoClient
-from accounts.constants import GOOGLE_ACCOUNT_URL, KAKAO_AUTHORIZE_URL
+from accounts.constants import (
+    GOOGLE_ACCOUNT_URL, KAKAO_AUTHORIZE_URL, TWITTER_REQUEST_TOKEN_URL, TWITTER_AUTHORIZE_URL, TWITTER_ACCESS_TOKEN_URL
+)
+from accounts.utils import get_oauth1_session
 
 
 class GoogleLoginView(APIView):
@@ -77,3 +80,50 @@ class KaKaoCallbackView(APIView):
         user_info = KakaoClient().get_user_info(access_token=access_token)
         user_nickname = user_info.get('kakao_account').get('profile').get('nickname')
         return Response({'message': f'{user_nickname} login success'}, status=status.HTTP_200_OK)
+
+
+class TwitterLoginView(APIView):
+    """Twitter 로그인 페이지"""
+    def get(self, request):
+        oauth = get_oauth1_session(
+            client_key=settings.TWITTER_API_KEY,
+            client_secret=settings.TWITTER_API_SECRET_KEY,
+            callback_uri=settings.TWITTER_REDIRECT_URI
+        )
+
+        try:
+            fetch_response = oauth.fetch_request_token(url=TWITTER_REQUEST_TOKEN_URL)
+            request.session['oauth_token'] = fetch_response.get('oauth_token')
+            request.session['oauth_token_secret'] = fetch_response.get('oauth_token_secret')
+
+            # 사용자를 트위터 로그인 페이지로 리디렉션
+            authorization_url = oauth.authorization_url(url=TWITTER_AUTHORIZE_URL)
+            return redirect(to=authorization_url)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TwitterCallbackView(APIView):
+    """Twitter로부터 리디렉션 받은 후 처리"""
+    def get(self, request):
+        oauth_token = request.session.get('oauth_token')
+        oauth_token_secret = request.session.get('oauth_token_secret')
+        oauth_verifier = request.GET.get('oauth_verifier')
+
+        oauth = get_oauth1_session(
+            client_key=settings.TWITTER_API_KEY,
+            client_secret=settings.TWITTER_API_SECRET_KEY,
+            resource_owner_key=oauth_token,
+            resource_owner_secret=oauth_token_secret,
+            verifier=oauth_verifier
+        )
+
+        try:
+            oauth_tokens = oauth.fetch_access_token(url=TWITTER_ACCESS_TOKEN_URL)
+            request.session['access_token'] = oauth_tokens.get('oauth_token')
+            request.session['access_token_secret'] = oauth_tokens.get('oauth_token_secret')
+
+            # 성공 페이지 렌더링
+            return Response({'message': f'twitter login success'}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
